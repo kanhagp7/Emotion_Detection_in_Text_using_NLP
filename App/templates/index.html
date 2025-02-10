@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion Detection</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700&family=Poppins:wght@500&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(to right, #f9f9f9, #e1e1e1); /* Light modern gradient */
+            color: #333;
+            padding: 20px;
+        }
+
+        h1 {
+            font-family: 'Roboto', sans-serif;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #333;
+            font-weight: 700;
+        }
+
+        .container {
+            background-color: rgba(255, 255, 255, 0.9);
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group label {
+            font-weight: 600;
+        }
+
+        textarea {
+            font-family: 'Poppins', sans-serif;
+            font-size: 16px;
+            border-radius: 8px;
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            font-weight: 500;
+        }
+
+        #predictButton {
+            background-color: #4CAF50;
+            color: white;
+            font-weight: bold;
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            margin-top: 15px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #predictButton:hover {
+            background-color: #45a049;
+        }
+
+        .highest-emotion {
+            font-size: 1.4em;
+            font-weight: bold;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        #emotionChart {
+            margin-top: 30px;
+        }
+
+        .result {
+            margin-top: 20px;
+            font-size: 1.5em;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Emotion Detection from Text</h1>
+        <div class="form-group">
+            <label for="textInput">Enter text to detect emotion:</label>
+            <textarea id="textInput" class="form-control" rows="4"></textarea>
+        </div>
+        <button id="predictButton" class="btn btn-primary mt-3">Predict Emotion</button>
+        
+        <div id="chartContainer" class="mt-5">
+            <canvas id="emotionChart" width="400" height="250"></canvas>
+        </div>
+
+        <div id="highestEmotion" class="highest-emotion mt-4"></div>
+    </div>
+
+    <script>
+        document.getElementById('predictButton').addEventListener('click', function() {
+            const textInput = document.getElementById('textInput').value;
+            
+            if (textInput.trim() === "") {
+                alert("Please enter some text.");
+                return;
+            }
+
+            // Send the text to the backend for emotion prediction
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ text: textInput })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("Error in prediction request");
+                }
+                return response.json();
+            })
+            .then(data => {
+                const emotionData = data.emotion_data;
+                
+                // Extract labels and probabilities
+                const labels = emotionData.map(item => item.emotion);
+                const probabilities = emotionData.map(item => item.probability);
+
+                // Find the emotion with the highest probability
+                const maxProbability = Math.max(...probabilities);
+                const highestEmotionIndex = probabilities.indexOf(maxProbability);
+                const highestEmotion = labels[highestEmotionIndex];
+                
+                // Clear existing chart if any
+                const chartCanvas = document.getElementById('emotionChart');
+                if (chartCanvas.chartInstance) {
+                    chartCanvas.chartInstance.destroy();
+                }
+
+                // Generate different colors for each bar
+                const barColors = ['#FF5733', '#33FF57', '#3357FF', '#FF33A8', '#33FFF2', '#F0FF33', '#F33FFF'];
+
+                // Create the horizontal bar chart
+                const ctx = chartCanvas.getContext('2d');
+                chartCanvas.chartInstance = new Chart(ctx, {
+                    type: 'bar',  // Horizontal bar chart
+                    data: {
+                        labels: labels,  // Emotion names as x-axis labels
+                        datasets: [{
+                            label: 'Emotion Probabilities (%)',
+                            data: probabilities,
+                            backgroundColor: barColors,  // Color for each emotion bar
+                            borderColor: barColors,  // Border color same as background color
+                            borderWidth: 2,
+                            barThickness: 20,  // Set bar width to a smaller value for single-line effect
+                            maxBarThickness: 30,  // Prevent bars from getting too wide
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            datalabels: {
+                                anchor: 'end',
+                                align: 'end',
+                                color: '#000',  // Changed from white to black for better contrast
+                                font: {
+                                    weight: 'bold',
+                                    size: 14
+                                },
+                                formatter: (value) => `${value}%`, // Show percentage value above bars
+                            }
+                        },
+                        indexAxis: 'y',  // Horizontal bar chart
+                        scales: {
+                            x: {
+                                ticks: {
+                                    display: false  // Hide numerical percentages (1%, 2%, etc.)
+                                },
+                                grid: {
+                                    display: false  // Remove grid lines
+                                }
+                            },
+                            y: {
+                                ticks: {
+                                    color: '#333',
+                                    font: {
+                                        weight: 'bold'
+                                    }
+                                },
+                                grid: {
+                                    display: false  // Remove grid lines for cleaner design
+                                }
+                            }
+                        },
+                        layout: {
+                            padding: {
+                                top: 40,    // Add top padding to avoid the highest emotion text overflow
+                                left: 20,   // Add left padding
+                                right: 20,  // Add right padding
+                                bottom: 20  // Add bottom padding
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels] // Enable the datalabels plugin
+                });
+
+                // Display the highest emotion above the chart
+                const highestEmotionDiv = document.getElementById('highestEmotion');
+                highestEmotionDiv.innerHTML = `Highest Predicted Emotion: <span style="color: #333; text-transform: capitalize;">${highestEmotion}</span>`;
+            })
+            .catch(error => {
+                console.error("Error:", error);
+                alert("An error occurred while processing the request.");
+            });
+        });
+    </script>
+</body>
+</html>
